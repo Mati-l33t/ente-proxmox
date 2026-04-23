@@ -83,21 +83,23 @@ DB_NAME="ente_db"
 DB_USER="ente"
 DB_PASS=$(gen_password)
 
-MINIO_KEY="ente$(tr -dc 'a-z0-9' </dev/urandom 2>/dev/null | head -c 10)"
+MINIO_KEY="ente$(tr -dc 'a-z0-9' </dev/urandom 2>/dev/null | head -c 10 || true)"
 MINIO_SECRET=$(gen_password)
 
 ENC_KEY=$(openssl rand -base64 32)
 HASH_KEY=$(openssl rand -base64 64 | tr -d '\n')
 JWT_SECRET=$(openssl rand -base64 32)
 
-# ── Auto-login for Proxmox console ────────────────────────────────────────────
-mkdir -p /etc/systemd/system/container-getty@1.service.d
-cat > /etc/systemd/system/container-getty@1.service.d/override.conf << 'EOF'
+# ── Auto-login for Proxmox console (only when no root password was set) ───────
+if [ "${ENTE_AUTOLOGIN:-1}" = "1" ]; then
+  mkdir -p /etc/systemd/system/container-getty@1.service.d
+  cat > /etc/systemd/system/container-getty@1.service.d/override.conf << 'EOF'
 [Service]
 ExecStart=
 ExecStart=-/sbin/agetty --autologin root --noclear --keep-baud tty%I 115200,38400,9600 $TERM
 EOF
-systemctl daemon-reload
+  systemctl daemon-reload
+fi
 
 # ── Disable IPv6 (prevents apt IPv6 hangs in some LXC setups) ────────────────
 cat >> /etc/sysctl.conf << 'EOF'

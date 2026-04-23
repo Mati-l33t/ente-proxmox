@@ -109,6 +109,7 @@ default_settings() {
   GATE=""
   VLAN_TAG=""
   PW=""
+  AUTOLOGIN=1
   SSH="no"
   UNPRIVILEGED="${var_unprivileged}"
   VERB="no"
@@ -190,8 +191,10 @@ advanced_settings() {
       3>&1 1>&2 2>&3) || exit
     [ "$pw1" != "$pw2" ] && msg_error "Passwords do not match"
     PW="--password ${pw1}"
+    AUTOLOGIN=0
   else
     PW=""
+    AUTOLOGIN=1
   fi
 
   SSH=$(whiptail --backtitle "Ente Installer" --title "SSH ACCESS" \
@@ -383,11 +386,18 @@ run_install() {
   echo -e "  ${YW}The Go and Node.js builds are CPU and memory intensive.${CL}"
   echo ""
 
+  local env_vars="SERVER_HOST='${SERVER_HOST}' STORAGE_TYPE='${STORAGE_TYPE}' STORAGE_PATH='${STORAGE_PATH}' ENTE_AUTOLOGIN='${AUTOLOGIN}'"
+
   if [ "$VERB" = "yes" ]; then
-    pct exec "$CTID" -- bash -c "SERVER_HOST='${SERVER_HOST}' STORAGE_TYPE='${STORAGE_TYPE}' STORAGE_PATH='${STORAGE_PATH}' bash /tmp/ente-install.sh"
+    pct exec "$CTID" -- bash -c "${env_vars} bash /tmp/ente-install.sh" \
+      || msg_error "Install script failed — enter container ${CTID} to debug: pct enter ${CTID}"
   else
-    pct exec "$CTID" -- bash -c "SERVER_HOST='${SERVER_HOST}' STORAGE_TYPE='${STORAGE_TYPE}' STORAGE_PATH='${STORAGE_PATH}' bash /tmp/ente-install.sh" \
-      2>&1 | grep -E "✔️|✖️|⏳|ERROR" || true
+    set +o pipefail
+    pct exec "$CTID" -- bash -c "${env_vars} bash /tmp/ente-install.sh" \
+      2>&1 | grep -E "✔️|✖️|⏳|ERROR"
+    local install_rc=${PIPESTATUS[0]}
+    set -o pipefail
+    [ "$install_rc" -ne 0 ] && msg_error "Install script failed — enter container ${CTID} to debug: pct enter ${CTID}"
   fi
 
   sleep 5
