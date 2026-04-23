@@ -394,6 +394,9 @@ msg_ok "museum.yaml written"
 msg_info "Building Museum server (Go, takes 2-5 minutes)"
 cd /opt/ente/server
 /usr/local/go/bin/go mod tidy -q 2>/dev/null || true
+export CGO_ENABLED=1
+export CGO_CFLAGS="$(pkg-config --cflags libsodium 2>/dev/null || echo '-I/usr/include')"
+export CGO_LDFLAGS="$(pkg-config --libs libsodium 2>/dev/null || echo '-lsodium')"
 /usr/local/go/bin/go build -o museum cmd/museum/main.go 2>&1 | tail -3 || true
 [ -f /opt/ente/server/museum ] || msg_error "Museum build failed — binary not found"
 msg_ok "Museum built"
@@ -601,6 +604,9 @@ msg_info "Rebuilding Museum server"
 cd /opt/ente/server
 [ -f museum ] && cp museum museum.bak
 go mod tidy -q 2>/dev/null || true
+export CGO_ENABLED=1
+export CGO_CFLAGS="$(pkg-config --cflags libsodium 2>/dev/null || echo '-I/usr/include')"
+export CGO_LDFLAGS="$(pkg-config --libs libsodium 2>/dev/null || echo '-lsodium')"
 if go build -o museum.new cmd/museum/main.go 2>&1 | tail -3; then
   mv museum.new museum
   rm -f museum.bak
