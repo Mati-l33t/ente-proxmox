@@ -42,7 +42,8 @@ gen_password() {
 }
 
 # ── Gather config (all user prompts run first, before any installation) ───────
-# SERVER_HOST can be injected by the ct script via env var. If not set, prompt.
+# SERVER_HOST and STORAGE_* can be injected by the ct script via env vars.
+
 if [ -z "${SERVER_HOST:-}" ]; then
   DEFAULT_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
   echo ""
@@ -53,6 +54,29 @@ if [ -z "${SERVER_HOST:-}" ]; then
   read -rp "  Server IP or hostname [${DEFAULT_IP}]: " SERVER_HOST
   SERVER_HOST="${SERVER_HOST:-${DEFAULT_IP}}"
 fi
+
+if [ -z "${STORAGE_TYPE:-}" ]; then
+  echo ""
+  echo -e "  ${YW}Photo Storage${CL}"
+  echo ""
+  echo -e "  1) Default  — /var/lib/minio (inside this container)"
+  echo -e "  2) Custom   — a path that is already mounted (NAS, bind mount, etc.)"
+  echo ""
+  read -rp "  Choice [1]: " _sc
+  case "${_sc:-1}" in
+    2|custom)
+      read -rp "  Storage path: " STORAGE_PATH
+      [ -z "${STORAGE_PATH:-}" ] && msg_error "Storage path cannot be empty"
+      STORAGE_TYPE="custom"
+      ;;
+    *)
+      STORAGE_PATH="/var/lib/minio"
+      STORAGE_TYPE="local"
+      ;;
+  esac
+fi
+: "${STORAGE_PATH:=/var/lib/minio}"
+: "${STORAGE_TYPE:=local}"
 
 # Generate all secrets before touching the system
 DB_NAME="ente_db"
@@ -200,30 +224,48 @@ msg_ok "PostgreSQL configured (db: ${DB_NAME}, user: ${DB_USER})"
 
 # ── MinIO service ─────────────────────────────────────────────────────────────
 msg_info "Configuring MinIO"
-useradd -r -s /sbin/nologin minio-user 2>/dev/null || true
-mkdir -p /var/lib/minio
-chown minio-user:minio-user /var/lib/minio
+
+if [ "${STORAGE_TYPE}" = "local" ]; then
+  # Local storage: dedicated user, standard network dependency
+  useradd -r -s /sbin/nologin minio-user 2>/dev/null || true
+  mkdir -p "${STORAGE_PATH}"
+  chown minio-user:minio-user "${STORAGE_PATH}"
+  MINIO_SVC_USER="User=minio-user"$'\n'"Group=minio-user"
+  MINIO_SVC_AFTER="After=network.target"
+  MINIO_SVC_REQUIRES=""
+else
+  # Custom/NAS storage: run as root to avoid bind-mount UID issues,
+  # wait for network and require the mount to be present before starting
+  mkdir -p "${STORAGE_PATH}"
+  touch "${STORAGE_PATH}/.ente-write-test" 2>/dev/null \
+    || msg_error "Storage path ${STORAGE_PATH} is not writable — check mount and permissions"
+  rm -f "${STORAGE_PATH}/.ente-write-test"
+  MINIO_SVC_USER=""
+  MINIO_SVC_AFTER="After=network-online.target"
+  MINIO_SVC_REQUIRES="RequiresMountsFor=${STORAGE_PATH}"
+  msg_ok "Custom storage path verified: ${STORAGE_PATH}"
+fi
 
 cat > /etc/default/minio << EOF
 MINIO_ROOT_USER=${MINIO_KEY}
 MINIO_ROOT_PASSWORD=${MINIO_SECRET}
-MINIO_VOLUMES=/var/lib/minio
+MINIO_VOLUMES=${STORAGE_PATH}
 MINIO_OPTS="--address :3200 --console-address :3201"
 EOF
 chmod 600 /etc/default/minio
 
-cat > /etc/systemd/system/minio.service << 'SVCEOF'
+cat > /etc/systemd/system/minio.service << EOF
 [Unit]
 Description=MinIO Object Storage
-After=network.target
+${MINIO_SVC_AFTER}
+${MINIO_SVC_REQUIRES}
 
 [Service]
 Type=notify
-WorkingDirectory=/var/lib/minio
-User=minio-user
-Group=minio-user
+WorkingDirectory=${STORAGE_PATH}
+${MINIO_SVC_USER}
 EnvironmentFile=/etc/default/minio
-ExecStart=/usr/local/bin/minio server $MINIO_VOLUMES $MINIO_OPTS
+ExecStart=/usr/local/bin/minio server \$MINIO_VOLUMES \$MINIO_OPTS
 Restart=always
 RestartSec=5
 LimitNOFILE=65536
@@ -232,7 +274,7 @@ StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
-SVCEOF
+EOF
 
 systemctl daemon-reload
 systemctl enable --now minio >/dev/null 2>&1
@@ -461,9 +503,10 @@ PostgreSQL
   password: ${DB_PASS}
 
 MinIO
-  access key: ${MINIO_KEY}
-  secret key: ${MINIO_SECRET}
-  endpoint:   http://localhost:3200
+  access key:   ${MINIO_KEY}
+  secret key:   ${MINIO_SECRET}
+  endpoint:     http://localhost:3200
+  storage path: ${STORAGE_PATH}
 
 Museum Config: /opt/ente/server/museum.yaml
 Caddy Config:  /etc/caddy/Caddyfile
@@ -619,6 +662,7 @@ cat > /etc/motd << MOTDEOF
   Albums:        http://${SERVER_HOST}:3002
   Museum API:    http://${SERVER_HOST}:8080
   MinIO Console: http://${IP}:3201
+  Photo Storage: ${STORAGE_PATH}
 
   Credentials: /root/ente-credentials.txt
   Config:      /opt/ente/server/museum.yaml

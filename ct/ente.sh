@@ -227,6 +227,77 @@ advanced_settings() {
 }
 
 # ─────────────────────────────────────────────
+# Ask storage type and CIFS details
+# ─────────────────────────────────────────────
+ask_storage() {
+  local choice
+  choice=$(whiptail --backtitle "Ente Installer" --title "PHOTO STORAGE" \
+    --menu "\nWhere should Ente store photos?" 12 64 2 \
+    "local" "Inside the container  (default: /var/lib/minio)" \
+    "cifs"  "Network share — CIFS/Samba  (e.g. OMV NAS)" \
+    3>&1 1>&2 2>&3) || exit
+
+  STORAGE_TYPE="$choice"
+
+  if [ "$choice" = "cifs" ]; then
+    CIFS_SHARE=$(whiptail --backtitle "Ente Installer" --title "CIFS SHARE PATH" \
+      --inputbox "\nEnter the CIFS share path:\n(e.g. //192.168.1.10/photos)" 10 64 "" \
+      3>&1 1>&2 2>&3) || exit
+    [ -z "${CIFS_SHARE:-}" ] && msg_error "CIFS share path cannot be empty"
+
+    STORAGE_PATH=$(whiptail --backtitle "Ente Installer" --title "HOST MOUNT POINT" \
+      --inputbox "\nMount point on this Proxmox host:\n(will be bind-mounted into the container)" 10 64 "/mnt/ente-photos" \
+      3>&1 1>&2 2>&3) || exit
+    STORAGE_PATH="${STORAGE_PATH:-/mnt/ente-photos}"
+
+    CIFS_USER=$(whiptail --backtitle "Ente Installer" --title "CIFS USERNAME" \
+      --inputbox "\nCIFS username:" 8 64 "" \
+      3>&1 1>&2 2>&3) || exit
+
+    CIFS_PASS=$(whiptail --backtitle "Ente Installer" --title "CIFS PASSWORD" \
+      --passwordbox "\nCIFS password:" 8 64 \
+      3>&1 1>&2 2>&3) || exit
+
+    echo -e "${TAB}${YW}Storage: CIFS ${CIFS_SHARE} → ${STORAGE_PATH}${CL}"
+    # CIFS bind mounts need a privileged container
+    UNPRIVILEGED="0"
+    echo -e "${TAB}${YW}Note: container set to Privileged (required for NAS bind mounts)${CL}"
+  else
+    STORAGE_PATH="/var/lib/minio"
+    CIFS_SHARE=""
+    CIFS_USER=""
+    CIFS_PASS=""
+    echo -e "${TAB}${YW}Storage: Local (inside container)${CL}"
+  fi
+  echo ""
+}
+
+setup_host_cifs() {
+  msg_info "Installing cifs-utils on Proxmox host"
+  apt-get install -y -qq cifs-utils >/dev/null 2>&1
+  msg_ok "cifs-utils installed"
+
+  msg_info "Mounting CIFS share on Proxmox host"
+  mkdir -p "${STORAGE_PATH}"
+
+  local CREDS_FILE="/etc/ente-cifs-${CTID}.creds"
+  printf 'username=%s\npassword=%s\n' "${CIFS_USER}" "${CIFS_PASS}" > "${CREDS_FILE}"
+  chmod 600 "${CREDS_FILE}"
+
+  if ! mountpoint -q "${STORAGE_PATH}" 2>/dev/null; then
+    mount -t cifs "${CIFS_SHARE}" "${STORAGE_PATH}" \
+      -o "credentials=${CREDS_FILE},uid=0,gid=0,file_mode=0770,dir_mode=0770,nobrl" \
+      || msg_error "CIFS mount failed — verify share path, credentials, and network access"
+  fi
+
+  # Persist across Proxmox host reboots
+  grep -qF "${CIFS_SHARE} ${STORAGE_PATH}" /etc/fstab 2>/dev/null || \
+    echo "${CIFS_SHARE} ${STORAGE_PATH} cifs credentials=${CREDS_FILE},uid=0,gid=0,file_mode=0770,dir_mode=0770,nobrl,nofail,_netdev 0 0" >> /etc/fstab
+
+  msg_ok "CIFS share mounted at ${STORAGE_PATH}"
+}
+
+# ─────────────────────────────────────────────
 # Ask server address (before container creation)
 # ─────────────────────────────────────────────
 ask_server_host() {
@@ -268,6 +339,10 @@ build_container() {
     --timezone "$tz" \
     $PW \
     >/dev/null 2>&1
+
+  # Bind-mount the NAS share into the container
+  [ "${STORAGE_TYPE}" = "cifs" ] && \
+    pct set "$CTID" --mp0 "${STORAGE_PATH},mp=${STORAGE_PATH}" >/dev/null 2>&1
   msg_ok "LXC container ${CTID} created"
 
   msg_info "Starting container"
@@ -309,9 +384,9 @@ run_install() {
   echo ""
 
   if [ "$VERB" = "yes" ]; then
-    pct exec "$CTID" -- bash -c "SERVER_HOST='${SERVER_HOST}' bash /tmp/ente-install.sh"
+    pct exec "$CTID" -- bash -c "SERVER_HOST='${SERVER_HOST}' STORAGE_TYPE='${STORAGE_TYPE}' STORAGE_PATH='${STORAGE_PATH}' bash /tmp/ente-install.sh"
   else
-    pct exec "$CTID" -- bash -c "SERVER_HOST='${SERVER_HOST}' bash /tmp/ente-install.sh" \
+    pct exec "$CTID" -- bash -c "SERVER_HOST='${SERVER_HOST}' STORAGE_TYPE='${STORAGE_TYPE}' STORAGE_PATH='${STORAGE_PATH}' bash /tmp/ente-install.sh" \
       2>&1 | grep -E "✔️|✖️|⏳|ERROR" || true
   fi
 
@@ -335,7 +410,9 @@ else
   advanced_settings
 fi
 
+ask_storage
 ask_server_host
+[ "${STORAGE_TYPE}" = "cifs" ] && setup_host_cifs
 build_container
 run_install
 
