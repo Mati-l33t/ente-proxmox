@@ -252,7 +252,8 @@ cat > /etc/default/minio << EOF
 MINIO_ROOT_USER=${MINIO_KEY}
 MINIO_ROOT_PASSWORD=${MINIO_SECRET}
 MINIO_VOLUMES=${STORAGE_PATH}
-MINIO_OPTS="--address :3200 --console-address :3201"
+MINIO_ADDRESS=:3200
+MINIO_CONSOLE_ADDRESS=:3201
 EOF
 chmod 600 /etc/default/minio
 
@@ -263,11 +264,11 @@ ${MINIO_SVC_AFTER}
 ${MINIO_SVC_REQUIRES}
 
 [Service]
-Type=notify
+Type=simple
 WorkingDirectory=${STORAGE_PATH}
 ${MINIO_SVC_USER}
 EnvironmentFile=/etc/default/minio
-ExecStart=/usr/local/bin/minio server \$MINIO_VOLUMES \$MINIO_OPTS
+ExecStart=/usr/local/bin/minio server \$MINIO_VOLUMES
 Restart=always
 RestartSec=5
 LimitNOFILE=65536
