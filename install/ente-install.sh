@@ -336,6 +336,12 @@ else
 fi
 msg_ok "Ente cloned"
 
+# Write .env.local so the update utility can always find the correct server URL
+cat > /opt/ente/web/.env.local << EOF
+NEXT_PUBLIC_ENTE_ENDPOINT=http://${SERVER_HOST}:8080
+NEXT_PUBLIC_ENTE_ALBUMS_ENDPOINT=http://${SERVER_HOST}:3002
+EOF
+
 # ── Museum config (museum.yaml) ───────────────────────────────────────────────
 msg_info "Writing museum.yaml"
 cat > /opt/ente/server/museum.yaml << EOF
@@ -387,7 +393,7 @@ msg_ok "museum.yaml written"
 # ── Build Museum (Go server) ──────────────────────────────────────────────────
 msg_info "Building Museum server (Go, takes 2-5 minutes)"
 cd /opt/ente/server
-/usr/local/go/bin/go mod tidy -q 2>/dev/null
+/usr/local/go/bin/go mod tidy -q 2>/dev/null || true
 /usr/local/go/bin/go build -o museum cmd/museum/main.go 2>&1 | tail -3 || true
 [ -f /opt/ente/server/museum ] || msg_error "Museum build failed — binary not found"
 msg_ok "Museum built"
@@ -479,10 +485,17 @@ cat > /etc/caddy/Caddyfile << 'CADDY'
 CADDY
 
 systemctl enable --now caddy >/dev/null 2>&1
-systemctl start museum >/dev/null 2>&1
-msg_ok "Caddy and Museum started"
+msg_ok "Caddy started"
 
-# ── Wait for Museum to be ready ───────────────────────────────────────────────
+msg_info "Starting Museum"
+systemctl start museum
+sleep 3
+if ! systemctl is-active --quiet museum; then
+  journalctl -u museum -n 30 --no-pager >&2 || true
+  msg_error "Museum failed to start — see logs above"
+fi
+
+# ── Wait for Museum API to accept connections ─────────────────────────────────
 msg_info "Waiting for Museum API to accept connections"
 for i in $(seq 1 24); do
   curl -fsSL http://localhost:8080/ping >/dev/null 2>&1 && break
@@ -587,7 +600,7 @@ msg_ok "Source updated"
 msg_info "Rebuilding Museum server"
 cd /opt/ente/server
 [ -f museum ] && cp museum museum.bak
-go mod tidy -q 2>/dev/null
+go mod tidy -q 2>/dev/null || true
 if go build -o museum.new cmd/museum/main.go 2>&1 | tail -3; then
   mv museum.new museum
   rm -f museum.bak
