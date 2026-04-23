@@ -200,6 +200,7 @@ chmod +x /usr/local/bin/minio
 curl -fsSL https://dl.min.io/client/mc/release/linux-amd64/mc \
   -o /usr/local/bin/mc
 chmod +x /usr/local/bin/mc
+ln -sf /usr/local/bin/mc /usr/bin/mc
 msg_ok "MinIO installed"
 
 # ── PostgreSQL ────────────────────────────────────────────────────────────────
@@ -212,17 +213,39 @@ for i in $(seq 1 12); do
 done
 pg_isready -q || msg_error "PostgreSQL did not become ready"
 
-su -c "psql -tc \"SELECT 1 FROM pg_roles WHERE rolname='${DB_USER}'\"" postgres \
+runuser -u postgres -- psql -tc "SELECT 1 FROM pg_roles WHERE rolname='${DB_USER}'" \
   | grep -q 1 || \
-  su -c "psql -c \"CREATE USER ${DB_USER} WITH ENCRYPTED PASSWORD '${DB_PASS}'\"" postgres \
+  runuser -u postgres -- psql -c "CREATE USER ${DB_USER} WITH ENCRYPTED PASSWORD '${DB_PASS}'" \
   >/dev/null 2>&1
-su -c "psql -tc \"SELECT 1 FROM pg_database WHERE datname='${DB_NAME}'\"" postgres \
+runuser -u postgres -- psql -tc "SELECT 1 FROM pg_database WHERE datname='${DB_NAME}'" \
   | grep -q 1 || \
-  su -c "psql -c \"CREATE DATABASE ${DB_NAME} OWNER ${DB_USER}\"" postgres \
+  runuser -u postgres -- psql -c "CREATE DATABASE ${DB_NAME} OWNER ${DB_USER}" \
   >/dev/null 2>&1
-su -c "psql -c \"GRANT ALL PRIVILEGES ON DATABASE ${DB_NAME} TO ${DB_USER}\"" postgres \
+runuser -u postgres -- psql -c "GRANT ALL PRIVILEGES ON DATABASE ${DB_NAME} TO ${DB_USER}" \
   >/dev/null 2>&1
 msg_ok "PostgreSQL configured (db: ${DB_NAME}, user: ${DB_USER})"
+
+# ── Museum systemd service (created early so it exists even if later steps fail)
+cat > /etc/systemd/system/museum.service << 'SVCEOF'
+[Unit]
+Description=Ente Museum API Server
+After=network.target postgresql.service minio.service
+Requires=postgresql.service minio.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/ente/server
+ExecStart=/opt/ente/server/museum
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+SVCEOF
+systemctl daemon-reload
+systemctl enable museum >/dev/null 2>&1
 
 # ── MinIO service ─────────────────────────────────────────────────────────────
 msg_info "Configuring MinIO"
@@ -268,7 +291,7 @@ Type=simple
 WorkingDirectory=${STORAGE_PATH}
 ${MINIO_SVC_USER}
 EnvironmentFile=/etc/default/minio
-ExecStart=/usr/local/bin/minio server \$MINIO_VOLUMES
+ExecStart=/usr/local/bin/minio server ${STORAGE_PATH}
 Restart=always
 RestartSec=5
 LimitNOFILE=65536
@@ -280,7 +303,13 @@ WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
-systemctl enable --now minio >/dev/null 2>&1
+systemctl enable minio >/dev/null 2>&1
+systemctl start minio
+sleep 3
+if ! systemctl is-active --quiet minio; then
+  journalctl -u minio -n 30 --no-pager >&2 || true
+  msg_error "MinIO failed to start — see logs above"
+fi
 
 # Wait for MinIO API to be ready, then create buckets
 msg_info "Waiting for MinIO and creating buckets"
@@ -362,29 +391,6 @@ cd /opt/ente/server
 /usr/local/go/bin/go build -o museum cmd/museum/main.go 2>&1 | tail -3 || true
 [ -f /opt/ente/server/museum ] || msg_error "Museum build failed — binary not found"
 msg_ok "Museum built"
-
-# ── Museum systemd service ────────────────────────────────────────────────────
-cat > /etc/systemd/system/museum.service << 'SVCEOF'
-[Unit]
-Description=Ente Museum API Server
-After=network.target postgresql.service minio.service
-Requires=postgresql.service minio.service
-
-[Service]
-Type=simple
-WorkingDirectory=/opt/ente/server
-ExecStart=/opt/ente/server/museum
-Restart=on-failure
-RestartSec=5
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=multi-user.target
-SVCEOF
-
-systemctl daemon-reload
-systemctl enable museum >/dev/null 2>&1
 
 # ── Web apps (yarn build) ─────────────────────────────────────────────────────
 msg_info "Installing web dependencies (yarn, takes a few minutes)"
@@ -563,7 +569,7 @@ msg_info "Backing up database"
 BACKUP_DIR="/root/ente-backups"
 mkdir -p "$BACKUP_DIR"
 BACKUP_FILE="${BACKUP_DIR}/ente-db-$(date +%Y%m%d-%H%M%S).sql.gz"
-if su -c "pg_dump ente_db | gzip > '${BACKUP_FILE}'" postgres 2>/dev/null; then
+if runuser -u postgres -- bash -c "pg_dump ente_db | gzip > '${BACKUP_FILE}'" 2>/dev/null; then
   msg_ok "Database backed up → ${BACKUP_FILE}"
   # Keep only the 5 most recent backups
   ls -t "${BACKUP_DIR}"/ente-db-*.sql.gz 2>/dev/null | tail -n +6 | xargs rm -f || true
