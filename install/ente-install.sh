@@ -283,12 +283,14 @@ systemctl enable --now minio >/dev/null 2>&1
 
 # Wait for MinIO API to be ready, then create buckets
 msg_info "Waiting for MinIO and creating buckets"
-for i in $(seq 1 20); do
+for i in $(seq 1 40); do
   mc alias set ente http://localhost:3200 "${MINIO_KEY}" "${MINIO_SECRET}" >/dev/null 2>&1 && break
-  sleep 3
+  sleep 5
 done
-mc alias set ente http://localhost:3200 "${MINIO_KEY}" "${MINIO_SECRET}" >/dev/null 2>&1 \
-  || msg_error "MinIO did not become ready"
+if ! mc alias set ente http://localhost:3200 "${MINIO_KEY}" "${MINIO_SECRET}" >/dev/null 2>&1; then
+  journalctl -u minio -n 30 --no-pager >&2 || true
+  msg_error "MinIO did not become ready after 200s — see logs above"
+fi
 
 mc mb --ignore-existing ente/b2-eu-cen >/dev/null 2>&1
 mc mb --ignore-existing ente/wasabi-eu-central-2-v3 >/dev/null 2>&1
