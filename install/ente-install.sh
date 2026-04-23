@@ -701,6 +701,12 @@ msg_info "Cleaning up"
 apt-get autoremove -y -qq
 apt-get autoclean -qq
 rm -f /tmp/ente-install.sh
+# Remove build artifacts that are no longer needed (saves ~3-4 GB)
+rm -rf /opt/ente/web/apps/*/.next
+rm -rf /opt/ente/web/apps/*/out
+rm -rf /root/.cache/go-build
+rm -rf /root/go/pkg/mod
+yarn cache clean --all 2>/dev/null || true
 systemctl daemon-reload
 systemctl restart container-getty@1 2>/dev/null || true
 msg_ok "Cleaned up"

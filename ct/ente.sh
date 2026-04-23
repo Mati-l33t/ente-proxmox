@@ -22,7 +22,7 @@ APP="Ente"
 NSAPP="ente"
 var_cpu="4"
 var_ram="6144"
-var_disk="30"
+var_disk="20"
 var_unprivileged="1"
 
 msg_info()  { echo -e "${TAB}${YW}  ⏳ ${1}...${CL}"; }
@@ -135,7 +135,7 @@ advanced_settings() {
     3>&1 1>&2 2>&3) || exit
 
   DISK_SIZE=$(whiptail --backtitle "Ente Installer" --title "DISK SIZE" \
-    --inputbox "\nSet Disk Size in GB:\n(30GB minimum — more for photo storage)" 10 58 "${var_disk}" \
+    --inputbox "\nSet Disk Size in GB:\n(20GB minimum — more if storing photos locally)" 10 58 "${var_disk}" \
     3>&1 1>&2 2>&3) || exit
 
   CORE_COUNT=$(whiptail --backtitle "Ente Installer" --title "CPU CORES" \
