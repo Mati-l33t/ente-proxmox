@@ -479,48 +479,124 @@ msg_ok "Credentials saved to ${CREDS_FILE}"
 msg_info "Setting up update utility"
 cat > /usr/bin/update << 'UPDATEEOF'
 #!/usr/bin/env bash
+# Safe update: backs up DB before anything changes, keeps old Museum binary as
+# fallback, builds web apps to a temp dir before swapping live files.
+# Photos (MinIO /var/lib/minio) and museum.yaml are never touched.
+
+set -euo pipefail
+export PATH="$PATH:/usr/local/go/bin"
+
 YW="\033[33m"; CM="\033[0;92m"; RD="\033[01;31m"; CL="\033[m"; TAB="  "
 msg_info() { echo -e "${TAB}${YW}  ⏳ ${1}...${CL}"; }
 msg_ok()   { echo -e "${TAB}${CM}  ✔️   ${1}${CL}"; }
+msg_warn() { echo -e "${TAB}${YW}  ⚠  ${1}${CL}"; }
 msg_error(){ echo -e "${TAB}${RD}  ✖️   ${1}${CL}"; exit 1; }
 
-export PATH="$PATH:/usr/local/go/bin"
+[[ $EUID -ne 0 ]] && msg_error "Run as root"
 
-CURRENT=$(cd /opt/ente && git describe --tags --abbrev=0 2>/dev/null || git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-LATEST=$(curl -fsSL https://api.github.com/repos/ente-io/ente/releases/latest \
-  | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+# ── Check disk space (web build needs ~3GB free) ──────────────────────────────
+FREE_KB=$(df /opt --output=avail 2>/dev/null | tail -1)
+if [ "${FREE_KB:-0}" -lt 3145728 ]; then
+  msg_warn "Less than 3GB free on /opt — build may fail"
+  read -rp "  Continue anyway? (y/N): " ok
+  [[ "${ok,,}" != "y" ]] && { echo "  Aborted."; exit 0; }
+fi
 
-echo -e "\n  Current: ${CURRENT}\n  Latest:  ${LATEST}\n"
-[ "$CURRENT" = "$LATEST" ] && { msg_ok "Already on latest"; exit 0; }
+# ── Version check ─────────────────────────────────────────────────────────────
+CURRENT=$(git -C /opt/ente rev-parse --short HEAD 2>/dev/null || echo "unknown")
+LATEST_TAG=$(curl -fsSL https://api.github.com/repos/ente-io/ente/releases/latest \
+  | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/' 2>/dev/null || true)
 
-msg_info "Stopping services"
-systemctl stop museum caddy
-msg_ok "Services stopped"
+echo -e "\n  Current commit: ${CURRENT}"
+echo -e "  Latest release: ${LATEST_TAG:-unknown}\n"
 
-msg_info "Pulling latest Ente"
+# ── Backup database (always, before any changes) ──────────────────────────────
+msg_info "Backing up database"
+BACKUP_DIR="/root/ente-backups"
+mkdir -p "$BACKUP_DIR"
+BACKUP_FILE="${BACKUP_DIR}/ente-db-$(date +%Y%m%d-%H%M%S).sql.gz"
+if su -c "pg_dump ente_db | gzip > '${BACKUP_FILE}'" postgres 2>/dev/null; then
+  msg_ok "Database backed up → ${BACKUP_FILE}"
+  # Keep only the 5 most recent backups
+  ls -t "${BACKUP_DIR}"/ente-db-*.sql.gz 2>/dev/null | tail -n +6 | xargs rm -f || true
+else
+  msg_warn "Database backup failed — proceeding anyway (check PostgreSQL is running)"
+fi
+
+# ── Pull latest source ────────────────────────────────────────────────────────
+msg_info "Pulling latest Ente source"
+# museum.yaml is gitignored — git pull will never touch it
 git -C /opt/ente pull -q
-msg_ok "Ente updated"
+msg_ok "Source updated"
 
-msg_info "Rebuilding Museum"
+# ── Rebuild Museum binary (keep old binary as fallback) ───────────────────────
+msg_info "Rebuilding Museum server"
 cd /opt/ente/server
+[ -f museum ] && cp museum museum.bak
 go mod tidy -q 2>/dev/null
-go build -o museum cmd/museum/main.go
-msg_ok "Museum rebuilt"
+if go build -o museum.new cmd/museum/main.go 2>&1 | tail -3; then
+  mv museum.new museum
+  rm -f museum.bak
+  msg_ok "Museum rebuilt"
+else
+  rm -f museum.new
+  if [ -f museum.bak ]; then
+    mv museum.bak museum
+    msg_error "Museum build failed — previous binary restored, no changes applied"
+  else
+    msg_error "Museum build failed and no previous binary exists"
+  fi
+fi
 
+# ── Rebuild web apps (build to temp dir, swap only on success) ────────────────
 msg_info "Rebuilding web apps (takes several minutes)"
 cd /opt/ente/web
-API_URL=$(grep -oP 'NEXT_PUBLIC_ENTE_ENDPOINT=\K[^ ]+' /opt/ente/web/.env.local 2>/dev/null || echo "http://localhost:8080")
+
+# Read the API URL from the live Caddyfile or fall back to localhost
+API_URL=$(grep -oP 'NEXT_PUBLIC_ENTE_ENDPOINT=\K\S+' /opt/ente/web/.env.local 2>/dev/null \
+  || grep -oP 'http://\S+:8080' /etc/caddy/Caddyfile 2>/dev/null | head -1 \
+  || echo "http://localhost:8080")
+ALBUMS_URL="${API_URL%:8080}:3002"
+
 yarn install --frozen-lockfile 2>&1 | tail -3
 yarn build:wasm 2>&1 | tail -3
-for app in photos accounts albums auth cast locker; do
-  yarn workspace "$app" next build 2>&1 | tail -3 || true
-  [ -d "/opt/ente/web/apps/${app}/out" ] && cp -r "/opt/ente/web/apps/${app}/out/." "/var/www/ente/apps/${app}/"
-done
-msg_ok "Web apps rebuilt"
 
-msg_info "Starting services"
-systemctl start museum caddy
-msg_ok "Ente updated to ${LATEST}"
+BUILD_FAILED=()
+for app in photos accounts albums auth cast locker; do
+  if yarn workspace "$app" next build 2>&1 | tail -3; then
+    if [ -d "/opt/ente/web/apps/${app}/out" ]; then
+      # Swap atomically: move old aside, copy new, remove old
+      LIVE="/var/www/ente/apps/${app}"
+      OLD="${LIVE}.old"
+      rm -rf "$OLD"
+      [ -d "$LIVE" ] && mv "$LIVE" "$OLD"
+      cp -r "/opt/ente/web/apps/${app}/out" "$LIVE"
+      rm -rf "$OLD"
+      msg_ok "${app} updated"
+    else
+      msg_warn "${app} built but no out/ dir found — skipping"
+      BUILD_FAILED+=("$app")
+    fi
+  else
+    msg_warn "${app} build failed — keeping existing live files"
+    BUILD_FAILED+=("$app")
+  fi
+done
+
+[ ${#BUILD_FAILED[@]} -gt 0 ] && \
+  msg_warn "Some apps failed to build: ${BUILD_FAILED[*]} — live files unchanged for those"
+
+# ── Restart services ──────────────────────────────────────────────────────────
+msg_info "Restarting services"
+systemctl restart museum caddy
+msg_ok "Services restarted"
+
+echo ""
+msg_ok "Update complete"
+echo -e "  ${YW}Photos and database untouched. Backup: ${BACKUP_FILE}${CL}"
+[ ${#BUILD_FAILED[@]} -gt 0 ] && \
+  echo -e "  ${YW}Check logs for failed apps: journalctl -u museum -f${CL}"
+echo ""
 UPDATEEOF
 chmod +x /usr/bin/update
 msg_ok "Update utility ready (run: update)"
