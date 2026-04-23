@@ -25,9 +25,16 @@ check_os() {
   # shellcheck source=/dev/null
   source /etc/os-release
   case "$ID" in
-    debian|ubuntu) msg_ok "Detected: $PRETTY_NAME" ;;
-    *) msg_error "Unsupported OS '$PRETTY_NAME' — Debian or Ubuntu required" ;;
+    debian)
+      case "$VERSION_ID" in
+        12|13) msg_ok "Detected: $PRETTY_NAME" ;;
+        *) msg_error "Unsupported Debian version ${VERSION_ID} — requires Debian 12 or 13" ;;
+      esac
+      ;;
+    ubuntu) msg_ok "Detected: $PRETTY_NAME" ;;
+    *) msg_error "Unsupported OS '$PRETTY_NAME' — Debian 12/13 or Ubuntu required" ;;
   esac
+  CODENAME="${VERSION_CODENAME}"
 }
 
 gen_password() {
@@ -88,17 +95,17 @@ msg_ok "Locale fixed"
 
 # ── APT sources (clean slate to avoid duplicates) ─────────────────────────────
 > /etc/apt/sources.list
-cat > /etc/apt/sources.list.d/debian.sources << 'SOURCES'
+cat > /etc/apt/sources.list.d/debian.sources << EOF
 Types: deb deb-src
 URIs: http://deb.debian.org/debian
-Suites: bookworm bookworm-updates
+Suites: ${CODENAME} ${CODENAME}-updates
 Components: main
 
 Types: deb deb-src
 URIs: http://security.debian.org/debian-security
-Suites: bookworm-security
+Suites: ${CODENAME}-security
 Components: main
-SOURCES
+EOF
 
 # ── System update ─────────────────────────────────────────────────────────────
 msg_info "Updating container OS"

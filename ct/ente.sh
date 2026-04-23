@@ -70,20 +70,29 @@ select_storage() {
 
 get_template() {
   local storage="$1"
-  local TEMPLATE_NAME="debian-12-standard_12.12-1_amd64.tar.zst"
 
-  local existing
-  existing=$(pveam list "$storage" 2>/dev/null | awk '{print $1}' | grep -F "$TEMPLATE_NAME" | head -1)
-  if [ -n "$existing" ]; then
-    echo "$existing"
-    return
-  fi
-
-  msg_info "Downloading Debian 12 template"
   pveam update >/dev/null 2>&1
-  pveam download "$storage" "$TEMPLATE_NAME" >/dev/null 2>&1 \
-    || msg_error "Failed to download Debian 12 template"
-  echo "${storage}:vztmpl/${TEMPLATE_NAME}"
+
+  # Prefer Debian 13 (Trixie), fall back to Debian 12 (Bookworm)
+  local TEMPLATE_NAME=""
+  for prefix in "debian-13-standard" "debian-12-standard"; do
+    local existing
+    existing=$(pveam list "$storage" 2>/dev/null | awk '{print $1}' | grep -F "$prefix" | sort -V | tail -1)
+    if [ -n "$existing" ]; then
+      TEMPLATE_NAME="$existing"
+      break
+    fi
+    local available
+    available=$(pveam available --section system 2>/dev/null | awk '{print $2}' | grep -F "$prefix" | sort -V | tail -1)
+    if [ -n "$available" ]; then
+      msg_info "Downloading ${available}"
+      pveam download "$storage" "$available" >/dev/null 2>&1 \
+        && { TEMPLATE_NAME="${storage}:vztmpl/${available}"; break; }
+    fi
+  done
+
+  [ -z "$TEMPLATE_NAME" ] && msg_error "No Debian 13 or 12 template found — run: pveam update"
+  echo "$TEMPLATE_NAME"
 }
 
 # ─────────────────────────────────────────────

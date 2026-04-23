@@ -27,7 +27,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/Mati-l33t/ente-proxmox/main/
 | CPU | 2 cores | 4 cores |
 | RAM | 4 GB | 6 GB |
 | Disk | 20 GB | 30 GB+ |
-| OS | Debian 12 | Debian 12 |
+| OS | Debian 13 or 12 | Debian 13 |
 
 **Build time:** 30–90 minutes depending on CPU speed. The Go and Node.js builds are CPU-intensive. On an Intel Xeon X5650 expect around 60–90 minutes for a full build.
 
