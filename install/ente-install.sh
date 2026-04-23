@@ -404,7 +404,7 @@ msg_ok "Museum built"
 # ── Web apps (yarn build) ─────────────────────────────────────────────────────
 msg_info "Installing web dependencies (yarn, takes a few minutes)"
 cd /opt/ente/web
-yarn install --frozen-lockfile 2>&1 | tail -3
+yarn install 2>&1 | tail -3
 msg_ok "Web dependencies installed"
 
 msg_info "Building WebAssembly module"
@@ -631,7 +631,7 @@ API_URL=$(grep -oP 'NEXT_PUBLIC_ENTE_ENDPOINT=\K\S+' /opt/ente/web/.env.local 2>
   || echo "http://localhost:8080")
 ALBUMS_URL="${API_URL%:8080}:3002"
 
-yarn install --frozen-lockfile 2>&1 | tail -3
+yarn install 2>&1 | tail -3
 yarn build:wasm 2>&1 | tail -3
 
 BUILD_FAILED=()
