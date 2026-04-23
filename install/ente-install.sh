@@ -176,10 +176,9 @@ curl -fsSL https://deb.nodesource.com/setup_22.x | bash - >/dev/null 2>&1
 apt-get install -y -qq nodejs >/dev/null 2>&1
 msg_ok "Node.js $(node --version) installed"
 
-# ── Yarn (via corepack) ───────────────────────────────────────────────────────
+# ── Yarn Classic (Ente web specifies yarn@1.22.22) ────────────────────────────
 msg_info "Installing Yarn"
-corepack enable >/dev/null 2>&1
-corepack prepare yarn@stable --activate >/dev/null 2>&1 || npm install -g yarn >/dev/null 2>&1
+npm install -g yarn >/dev/null 2>&1
 msg_ok "Yarn $(yarn --version 2>/dev/null || echo installed) installed"
 
 # ── Caddy ─────────────────────────────────────────────────────────────────────
