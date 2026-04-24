@@ -736,7 +736,7 @@ msg_ok "set-storage utility ready (run: set-storage)"
 msg_info "Setting up MOTD"
 > /etc/motd
 find /etc/update-motd.d/ -type f -exec chmod -x {} \; 2>/dev/null || true
-cat > /etc/update-motd.d/99-ente << 'MOTDEOF'
+cat > /etc/profile.d/ente-motd.sh << 'MOTDEOF'
 #!/usr/bin/env bash
 . /etc/os-release
 IP=$(hostname -I 2>/dev/null | awk '{print $1}')
@@ -750,7 +750,7 @@ echo "    🏠   Hostname: $(hostname)"
 echo "    💡   IP Address: ${IP}"
 echo ""
 MOTDEOF
-chmod +x /etc/update-motd.d/99-ente
+chmod +x /etc/profile.d/ente-motd.sh
 msg_ok "MOTD configured"
 
 # ── Cleanup ───────────────────────────────────────────────────────────────────
