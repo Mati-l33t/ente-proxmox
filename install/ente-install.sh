@@ -185,15 +185,21 @@ msg_ok "Yarn $(yarn --version 2>/dev/null || echo installed) installed"
 msg_info "Installing Rust and wasm-pack"
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
   | sh -s -- -y --profile minimal --no-modify-path >/dev/null 2>&1
+[ -f "$HOME/.cargo/bin/rustup" ] || msg_error "Rust installation failed"
 export PATH="$HOME/.cargo/bin:$PATH"
 echo 'export PATH="$HOME/.cargo/bin:$PATH"' > /etc/profile.d/rust.sh
 chmod +x /etc/profile.d/rust.sh
 rustup target add wasm32-unknown-unknown >/dev/null 2>&1
 WPACK_VER=$(curl -fsSL https://api.github.com/repos/rustwasm/wasm-pack/releases/latest \
-  | grep '"tag_name"' | sed -E 's/.*"v([^"]+)".*/\1/' 2>/dev/null || echo "0.13.1")
+  | grep '"tag_name"' | sed -E 's/.*"v([^"]+)".*/\1/' 2>/dev/null || true)
+WPACK_VER="${WPACK_VER:-0.13.1}"
+WPACK_TMP=$(mktemp -d)
 curl -fsSL "https://github.com/rustwasm/wasm-pack/releases/download/v${WPACK_VER}/wasm-pack-v${WPACK_VER}-x86_64-unknown-linux-musl.tar.gz" \
-  | tar -xzO --wildcards "*/wasm-pack" > /usr/local/bin/wasm-pack 2>/dev/null
+  | tar -xzC "${WPACK_TMP}"
+find "${WPACK_TMP}" -name "wasm-pack" -type f | head -1 | xargs -I{} mv {} /usr/local/bin/wasm-pack
+rm -rf "${WPACK_TMP}"
 chmod +x /usr/local/bin/wasm-pack
+[ -x /usr/local/bin/wasm-pack ] || msg_error "wasm-pack installation failed"
 msg_ok "Rust $(rustc --version 2>/dev/null | awk '{print $2}') and wasm-pack ${WPACK_VER} installed"
 
 # ── Caddy ─────────────────────────────────────────────────────────────────────
