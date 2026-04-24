@@ -739,6 +739,7 @@ cat > /etc/motd << MOTDEOF
 
   Ente Photos LXC
   Provided by: Mati-l33t
+  Website: https://proxmox-scripts.com
   GitHub: https://github.com/Mati-l33t/ente-proxmox
 
   OS:       $(grep PRETTY_NAME /etc/os-release | cut -d'"' -f2)

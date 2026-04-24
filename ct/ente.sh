@@ -40,6 +40,7 @@ header_info() {
 EOF
   echo -e "${TAB}${BOLD}${BL}Ente Photos LXC Installer${CL}"
   echo -e "${TAB}${YW}Provided by: Mati-l33t${CL}"
+  echo -e "${TAB}${YW}Website: https://proxmox-scripts.com${CL}"
   echo -e "${TAB}${YW}GitHub: https://github.com/Mati-l33t/ente-proxmox${CL}"
   echo ""
 }
