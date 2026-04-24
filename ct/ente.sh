@@ -338,7 +338,7 @@ build_container() {
     --net0 "name=eth0,bridge=${BRG},ip=${NET}${GATE}${VLAN_TAG}" \
     --features "nesting=1" \
     --unprivileged "$UNPRIVILEGED" \
-    --tags "ente" \
+    --tags "ente;proxmox-scripts.com" \
     --onboot 1 \
     --timezone "$tz" \
     $PW \
