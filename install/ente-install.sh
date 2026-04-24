@@ -504,23 +504,6 @@ CADDY
 systemctl enable --now caddy >/dev/null 2>&1
 msg_ok "Caddy started"
 
-msg_info "Starting Museum"
-systemctl start museum
-sleep 3
-if ! systemctl is-active --quiet museum; then
-  journalctl -u museum -n 30 --no-pager >&2 || true
-  msg_error "Museum failed to start — see logs above"
-fi
-
-# ── Wait for Museum API to accept connections ─────────────────────────────────
-msg_info "Waiting for Museum API to accept connections"
-for i in $(seq 1 24); do
-  curl -fsSL http://localhost:8080/ping >/dev/null 2>&1 && break
-  sleep 5
-done
-curl -fsSL http://localhost:8080/ping >/dev/null 2>&1 \
-  || echo -e "${TAB}${YW}  ⚠ Museum not yet responding — check: journalctl -u museum -f${CL}"
-
 # ── Credentials file ──────────────────────────────────────────────────────────
 CREDS_FILE="/root/ente-credentials.txt"
 cat > "${CREDS_FILE}" << EOF
@@ -558,6 +541,23 @@ Update:        run 'update'
 EOF
 chmod 600 "${CREDS_FILE}"
 msg_ok "Credentials saved to ${CREDS_FILE}"
+
+msg_info "Starting Museum"
+systemctl start museum
+sleep 3
+if ! systemctl is-active --quiet museum; then
+  journalctl -u museum -n 30 --no-pager >&2 || true
+  msg_error "Museum failed to start — see logs above"
+fi
+
+# ── Wait for Museum API to accept connections ─────────────────────────────────
+msg_info "Waiting for Museum API to accept connections"
+for i in $(seq 1 24); do
+  curl -fsSL http://localhost:8080/ping >/dev/null 2>&1 && break
+  sleep 5
+done
+curl -fsSL http://localhost:8080/ping >/dev/null 2>&1 \
+  || echo -e "${TAB}${YW}  ⚠ Museum not yet responding — check: journalctl -u museum -f${CL}"
 
 # ── Update utility ────────────────────────────────────────────────────────────
 msg_info "Setting up update utility"
