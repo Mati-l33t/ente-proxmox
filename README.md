@@ -1,6 +1,6 @@
 # Ente Photos — Proxmox LXC Installer
 
-Installs [Ente Photos](https://ente.io) as a native Debian 12 LXC container on Proxmox VE — no Docker required. Supports all 64-bit CPUs including older hardware without AVX (e.g. Intel Xeon X5650, E5-2xxx, i7-2xxx series).
+Installs [Ente Photos](https://ente.io) as a native Debian 13 LXC container on Proxmox VE — no Docker required. Supports all 64-bit CPUs including older hardware without AVX.
 
 ---
 
@@ -12,7 +12,7 @@ Run on your **Proxmox host** to create a new LXC and install Ente inside it:
 bash <(curl -fsSL https://raw.githubusercontent.com/Mati-l33t/ente-proxmox/main/ct/ente.sh)
 ```
 
-Or run directly **inside an existing Debian 12 LXC**:
+Or run directly **inside an existing Debian 13 LXC**:
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/Mati-l33t/ente-proxmox/main/install/ente-install.sh)
@@ -29,7 +29,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/Mati-l33t/ente-proxmox/main/
 | Disk | 20 GB | 30 GB+ |
 | OS | Debian 13 or 12 | Debian 13 |
 
-**Build time:** 30–90 minutes depending on CPU speed. The Go and Node.js builds are CPU-intensive. On an Intel Xeon X5650 expect around 60–90 minutes for a full build.
+**Build time:** 30–90 minutes depending on CPU speed. The Go and Node.js builds are CPU-intensive. Expect toward the higher end on older CPUs.
 
 ### CPU compatibility
 
@@ -179,7 +179,7 @@ systemctl restart museum
 
 ## Configuring the mobile app
 
-In the Ente mobile app, go to **Settings → General → Self Hosting** and set the endpoint to:
+In the Ente mobile app, configure the custom server endpoint to point to your Museum API:
 
 ```
 http://YOUR_IP:8080
