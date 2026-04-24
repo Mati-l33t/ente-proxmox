@@ -179,7 +179,7 @@ systemctl restart museum
 
 ## Configuring the mobile app
 
-In the Ente mobile app, configure the custom server endpoint to point to your Museum API:
+On the Ente app's login/welcome screen, **tap the Ente logo 7 times**. A dialog will appear to enter a custom server endpoint. Set it to:
 
 ```
 http://YOUR_IP:8080
