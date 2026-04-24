@@ -740,6 +740,7 @@ msg_ok "set-storage utility ready (run: set-storage)"
 
 # ── MOTD ──────────────────────────────────────────────────────────────────────
 msg_info "Setting up MOTD"
+IP=$(hostname -I 2>/dev/null | awk '{print $1}')
 > /etc/motd
 find /etc/update-motd.d/ -type f -exec chmod -x {} \; 2>/dev/null || true
 cat > /etc/profile.d/ente-motd.sh << 'MOTDEOF'
