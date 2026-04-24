@@ -734,32 +734,23 @@ msg_ok "set-storage utility ready (run: set-storage)"
 
 # ── MOTD ──────────────────────────────────────────────────────────────────────
 msg_info "Setting up MOTD"
+> /etc/motd
+find /etc/update-motd.d/ -type f -exec chmod -x {} \; 2>/dev/null || true
+cat > /etc/update-motd.d/99-ente << 'MOTDEOF'
+#!/usr/bin/env bash
+. /etc/os-release
 IP=$(hostname -I 2>/dev/null | awk '{print $1}')
-cat > /etc/motd << MOTDEOF
-
-  Ente Photos LXC
-  Provided by: Mati-l33t
-  Website: https://proxmox-scripts.com
-  GitHub: https://github.com/Mati-l33t/ente-proxmox
-
-  OS:       $(grep PRETTY_NAME /etc/os-release | cut -d'"' -f2)
-  Hostname: $(hostname)
-  IP:       ${IP}
-
-  Photos:        http://${SERVER_HOST}:3000
-  Accounts:      http://${SERVER_HOST}:3001
-  Albums:        http://${SERVER_HOST}:3002
-  Museum API:    http://${SERVER_HOST}:8080
-  MinIO Console: http://${IP}:3201
-  Photo Storage: ${STORAGE_PATH}
-
-  Credentials: /root/ente-credentials.txt
-  Config:      /opt/ente/server/museum.yaml
-  Caddy:       /etc/caddy/Caddyfile
-  Update:      run 'update'
-  Storage:     run 'set-storage' after registering to remove the 10 GB limit
-
+echo ""
+echo "  Ente Photos LXC"
+echo ""
+echo "    🌐   Provided by: Mati-l33t | Website: https://proxmox-scripts.com | GitHub: https://github.com/Mati-l33t/ente-proxmox"
+echo ""
+echo "    🖥️   OS: ${PRETTY_NAME}"
+echo "    🏠   Hostname: $(hostname)"
+echo "    💡   IP Address: ${IP}"
+echo ""
 MOTDEOF
+chmod +x /etc/update-motd.d/99-ente
 msg_ok "MOTD configured"
 
 # ── Cleanup ───────────────────────────────────────────────────────────────────
