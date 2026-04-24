@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2025-2026 Mati-l33t
+# Copyright (c) 2025-2026 proxmox-scripts.com
 # Author: Mati-l33t
 # License: MIT | https://github.com/Mati-l33t/ente-proxmox/raw/main/LICENSE
 # Source: https://ente.io | Github: https://github.com/ente-io/ente
-# Website: https://proxmox-scripts.com
 
 if [ -f /etc/pve/version ]; then
   echo "ERROR: This script must run inside an LXC container, not on the Proxmox host!"
