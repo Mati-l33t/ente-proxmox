@@ -688,6 +688,46 @@ UPDATEEOF
 chmod +x /usr/bin/update
 msg_ok "Update utility ready (run: update)"
 
+# ── set-storage utility ───────────────────────────────────────────────────────
+msg_info "Setting up set-storage utility"
+cat > /usr/bin/set-storage << 'STOREOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+YW="\033[33m"; CM="\033[0;92m"; RD="\033[01;31m"; CL="\033[m"; TAB="  "
+msg_ok()    { echo -e "${TAB}${CM}  ✔️   ${1}${CL}"; }
+msg_error() { echo -e "${TAB}${RD}  ✖️   ${1}${CL}"; exit 1; }
+
+[[ $EUID -ne 0 ]] && msg_error "Run as root"
+
+COUNT=$(runuser -u postgres -- psql ente_db -t -c "SELECT COUNT(*) FROM users;" 2>/dev/null | tr -d ' \n')
+[[ "$COUNT" == "0" ]] && { echo "  No users found — register an account first."; exit 0; }
+
+runuser -u postgres -- psql ente_db -q << 'SQL'
+DO $$
+DECLARE
+  uid BIGINT;
+BEGIN
+  FOR uid IN SELECT user_id FROM users LOOP
+    IF EXISTS (SELECT 1 FROM subscriptions WHERE user_id = uid) THEN
+      UPDATE subscriptions
+        SET storage = 1099511627776000, expiry_time = 9999999999000000
+        WHERE user_id = uid;
+    ELSE
+      INSERT INTO subscriptions
+        (user_id, storage, expiry_time, product_id, payment_provider, original_transaction_id)
+        VALUES (uid, 1099511627776000, 9999999999000000, 'self_hosted', 'stripe', 'self_hosted');
+    END IF;
+  END LOOP;
+END;
+$$;
+SQL
+
+msg_ok "Storage quota set to unlimited for all ${COUNT} user(s)"
+STOREOF
+chmod +x /usr/bin/set-storage
+msg_ok "set-storage utility ready (run: set-storage)"
+
 # ── MOTD ──────────────────────────────────────────────────────────────────────
 msg_info "Setting up MOTD"
 IP=$(hostname -I 2>/dev/null | awk '{print $1}')
@@ -712,6 +752,7 @@ cat > /etc/motd << MOTDEOF
   Config:      /opt/ente/server/museum.yaml
   Caddy:       /etc/caddy/Caddyfile
   Update:      run 'update'
+  Storage:     run 'set-storage' after registering to remove the 10 GB limit
 
 MOTDEOF
 msg_ok "MOTD configured"

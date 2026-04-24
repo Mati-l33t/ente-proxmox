@@ -87,6 +87,23 @@ All generated credentials are saved to `/root/ente-credentials.txt` inside the c
 
 Ente has no pre-set admin account. **The first account you register in the Photos app becomes the admin.** Open `http://IP:3000`, click Sign Up, and create your account.
 
+> **Note:** During registration, Ente will ask for an email verification code. Since SMTP is not configured, the code is printed to the Museum log instead of sent by email. Watch for it with:
+> ```bash
+> journalctl -u museum -f
+> ```
+
+---
+
+## Removing the storage limit
+
+The default free plan includes a 10 GB quota. On a self-hosted instance you can remove this limit by running one command inside the container after registering your account:
+
+```bash
+set-storage
+```
+
+This sets unlimited storage for every registered user. Run it again whenever you add new accounts.
+
 ---
 
 ## File locations
