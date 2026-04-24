@@ -88,7 +88,7 @@ MINIO_SECRET=$(gen_password)
 
 ENC_KEY=$(openssl rand -base64 32)
 HASH_KEY=$(openssl rand -base64 64 | tr -d '\n')
-JWT_SECRET=$(openssl rand -base64 32)
+JWT_SECRET=$(openssl rand -base64 32 | tr '+/' '-_')
 
 # ── Auto-login for Proxmox console (only when no root password was set) ───────
 if [ "${ENTE_AUTOLOGIN:-1}" = "1" ]; then
