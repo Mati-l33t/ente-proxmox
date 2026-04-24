@@ -4,6 +4,7 @@
 # Author: Mati-l33t
 # License: MIT | https://github.com/Mati-l33t/ente-proxmox/raw/main/LICENSE
 # Source: https://ente.io | Github: https://github.com/ente-io/ente
+# Website: https://proxmox-scripts.com
 
 set -euo pipefail
 
