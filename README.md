@@ -87,10 +87,23 @@ All generated credentials are saved to `/root/ente-credentials.txt` inside the c
 
 Ente has no pre-set admin account. **The first account you register in the Photos app becomes the admin.** Open `http://IP:3000`, click Sign Up, and create your account.
 
-> **Note:** During registration, Ente will ask for an email verification code. Since SMTP is not configured, the code is printed to the Museum log instead of sent by email. Watch for it with:
-> ```bash
-> journalctl -u museum -f
-> ```
+### Getting the verification code
+
+Ente sends a 6-digit code to your email when you register or log in. Since SMTP is not configured on a fresh install, the email is never sent — but the code is printed directly to the Museum log.
+
+**Before clicking "Send code" in the app**, open a terminal inside the container and run:
+
+```bash
+journalctl -u museum -f
+```
+
+Then go back to the browser and request the code. It will appear in the log within a second:
+
+```
+Skipping sending email to you@example.com: Verification code: 123456
+```
+
+Enter that 6-digit code in the app to continue.
 
 ---
 

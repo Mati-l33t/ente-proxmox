@@ -534,6 +534,10 @@ MinIO
 
 Museum Config: /opt/ente/server/museum.yaml
 Caddy Config:  /etc/caddy/Caddyfile
+Verification code (no SMTP configured)
+  Run 'journalctl -u museum -f' BEFORE requesting a code in the app.
+  The code appears in the log: "Skipping sending email ... Verification code: XXXXXX"
+
 Logs:          journalctl -u museum -f
                journalctl -u minio -f
                journalctl -u caddy -f
