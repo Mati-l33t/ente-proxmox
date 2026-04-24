@@ -181,6 +181,21 @@ msg_info "Installing Yarn"
 npm install -g yarn >/dev/null 2>&1
 msg_ok "Yarn $(yarn --version 2>/dev/null || echo installed) installed"
 
+# ── Rust + wasm-pack (required for Ente's WebAssembly module) ────────────────
+msg_info "Installing Rust and wasm-pack"
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+  | sh -s -- -y --profile minimal --no-modify-path >/dev/null 2>&1
+export PATH="$HOME/.cargo/bin:$PATH"
+echo 'export PATH="$HOME/.cargo/bin:$PATH"' > /etc/profile.d/rust.sh
+chmod +x /etc/profile.d/rust.sh
+rustup target add wasm32-unknown-unknown >/dev/null 2>&1
+WPACK_VER=$(curl -fsSL https://api.github.com/repos/rustwasm/wasm-pack/releases/latest \
+  | grep '"tag_name"' | sed -E 's/.*"v([^"]+)".*/\1/' 2>/dev/null || echo "0.13.1")
+curl -fsSL "https://github.com/rustwasm/wasm-pack/releases/download/v${WPACK_VER}/wasm-pack-v${WPACK_VER}-x86_64-unknown-linux-musl.tar.gz" \
+  | tar -xzO --wildcards "*/wasm-pack" > /usr/local/bin/wasm-pack 2>/dev/null
+chmod +x /usr/local/bin/wasm-pack
+msg_ok "Rust $(rustc --version 2>/dev/null | awk '{print $2}') and wasm-pack ${WPACK_VER} installed"
+
 # ── Caddy ─────────────────────────────────────────────────────────────────────
 msg_info "Installing Caddy"
 curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
@@ -407,7 +422,7 @@ yarn install 2>&1 | tail -3
 msg_ok "Web dependencies installed"
 
 msg_info "Building WebAssembly module"
-yarn build:wasm 2>&1 | tail -3
+yarn build:wasm 2>&1 | tail -5 || msg_error "WebAssembly build failed"
 msg_ok "WebAssembly built"
 
 API_URL="http://${SERVER_HOST}:8080"
@@ -553,7 +568,7 @@ cat > /usr/bin/update << 'UPDATEEOF'
 # Photos (MinIO /var/lib/minio) and museum.yaml are never touched.
 
 set -euo pipefail
-export PATH="$PATH:/usr/local/go/bin"
+export PATH="$PATH:/usr/local/go/bin:/root/.cargo/bin"
 
 YW="\033[33m"; CM="\033[0;92m"; RD="\033[01;31m"; CL="\033[m"; TAB="  "
 msg_info() { echo -e "${TAB}${YW}  ⏳ ${1}...${CL}"; }
