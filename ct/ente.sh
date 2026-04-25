@@ -168,8 +168,9 @@ advanced_settings() {
       3>&1 1>&2 2>&3) || exit
     local gw
     gw=$(whiptail --backtitle "Ente Installer" --title "GATEWAY" \
-      --inputbox "\nEnter Gateway IP:" 10 58 "" \
+      --inputbox "\nEnter Gateway IP:\n(e.g. 192.168.1.1)" 10 58 "" \
       3>&1 1>&2 2>&3) || exit
+    [ -z "$gw" ] && msg_error "Gateway IP cannot be empty for static IP configuration"
     GATE=",gw=${gw}"
   else
     NET="dhcp"
@@ -330,7 +331,8 @@ build_container() {
   [[ "$tz" == Etc/* ]] && tz="UTC"
 
   msg_info "Creating LXC container ${CTID}"
-  pct create "$CTID" "$TEMPLATE" \
+  local pct_out
+  pct_out=$(pct create "$CTID" "$TEMPLATE" \
     --hostname "$HN" \
     --cores "$CORE_COUNT" \
     --memory "$RAM_SIZE" \
@@ -342,7 +344,7 @@ build_container() {
     --onboot 1 \
     --timezone "$tz" \
     $PW \
-    >/dev/null 2>&1
+    2>&1) || msg_error "Failed to create LXC container ${CTID}: ${pct_out}"
 
   # Bind-mount the NAS share into the container
   [ "${STORAGE_TYPE}" = "cifs" ] && \
@@ -440,3 +442,4 @@ echo -e "${TAB}${YW}Credentials:${CL} cat /root/ente-credentials.txt  (inside co
 echo -e "${TAB}${YW}Enter container:${CL} pct enter ${CTID}"
 echo -e "${TAB}${YW}Register first account in Photos app — it becomes admin.${CL}"
 echo ""
+
