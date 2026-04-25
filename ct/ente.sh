@@ -312,10 +312,14 @@ setup_host_cifs() {
 # Ask server address (before container creation)
 # ─────────────────────────────────────────────
 ask_server_host() {
+  # Pre-fill with static IP (strip CIDR) so the user doesn't retype it;
+  # blank for DHCP so the install script auto-detects the container IP.
+  local default_host=""
+  [ "${NET:-dhcp}" != "dhcp" ] && default_host="${NET%%/*}"
+
   SERVER_HOST=$(whiptail --backtitle "Ente Installer" --title "SERVER ADDRESS" \
-    --inputbox "\nEnter the IP or domain clients will use to reach Ente.\n\nFor DHCP, leave blank — the container's IP will be auto-detected.\nFor static IP, enter it here (e.g. 192.168.1.50).\n\nThis gets baked into the web app build." 16 62 "" \
+    --inputbox "\nEnter the IP or domain clients will use to reach Ente.\n\nStatic IP: confirm or replace with a domain name.\nDHCP: leave blank to auto-detect, or enter a domain name.\n\nThis gets baked into the web app build." 16 62 "$default_host" \
     3>&1 1>&2 2>&3) || exit
-  # Blank is fine — install script auto-detects inside the container
   echo -e "${TAB}${YW}Server address: ${BL}${SERVER_HOST:-auto-detect}${CL}"
   echo ""
 }
