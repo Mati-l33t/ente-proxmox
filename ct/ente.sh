@@ -404,7 +404,7 @@ run_install() {
   echo -e "  ${YW}The Go and Node.js builds are CPU and memory intensive.${CL}"
   echo ""
 
-  local env_vars="SERVER_HOST='${SERVER_HOST}' STORAGE_TYPE='${STORAGE_TYPE}' STORAGE_PATH='${STORAGE_PATH}' ENTE_AUTOLOGIN='${AUTOLOGIN}'"
+  local env_vars="SERVER_HOST='${SERVER_HOST}' STORAGE_TYPE='${STORAGE_TYPE}' STORAGE_PATH='${STORAGE_PATH}' ENTE_AUTOLOGIN='${AUTOLOGIN}' ENTE_QUIET_FINISH='1'"
 
   if [ "$VERB" = "yes" ]; then
     pct exec "$CTID" -- bash -c "${env_vars} bash /tmp/ente-install.sh" \
