@@ -86,7 +86,7 @@ get_template() {
     local available
     available=$(pveam available --section system 2>/dev/null | awk '{print $2}' | grep -F "$prefix" | sort -V | tail -1)
     if [ -n "$available" ]; then
-      msg_info "Downloading ${available}"
+      msg_info "Downloading ${available}" >&2
       pveam download "$storage" "$available" >/dev/null 2>&1 \
         && { TEMPLATE_NAME="${storage}:vztmpl/${available}"; break; }
     fi
