@@ -776,15 +776,18 @@ systemctl restart container-getty@1 2>/dev/null || true
 msg_ok "Cleaned up"
 
 # ── Done ──────────────────────────────────────────────────────────────────────
-echo ""
-msg_ok "Ente installation complete!"
-echo ""
-echo -e "  ${CM}Photos:${CL}        http://${SERVER_HOST}:3000"
-echo -e "  ${CM}Accounts:${CL}      http://${SERVER_HOST}:3001"
-echo -e "  ${CM}Albums:${CL}        http://${SERVER_HOST}:3002"
-echo -e "  ${CM}Museum API:${CL}    http://${SERVER_HOST}:8080"
-echo -e "  ${CM}MinIO Console:${CL} http://${IP}:3201"
-echo ""
-echo -e "  ${YW}Credentials saved to: /root/ente-credentials.txt${CL}"
-echo -e "  ${YW}Register the first account in the Photos app — it becomes admin.${CL}"
-echo ""
+if [ "${ENTE_QUIET_FINISH:-0}" != "1" ]; then
+  echo ""
+  msg_ok "Ente installation complete!"
+  echo ""
+  echo -e "  ${CM}Photos:${CL}        http://${SERVER_HOST}:3000"
+  echo -e "  ${CM}Accounts:${CL}      http://${SERVER_HOST}:3001"
+  echo -e "  ${CM}Albums:${CL}        http://${SERVER_HOST}:3002"
+  echo -e "  ${CM}Museum API:${CL}    http://${SERVER_HOST}:8080"
+  echo -e "  ${CM}MinIO Console:${CL} http://${IP}:3201"
+  echo ""
+  echo -e "  ${YW}Credentials saved to: /root/ente-credentials.txt${CL}"
+  echo -e "  ${YW}Register the first account in the Photos app — it becomes admin.${CL}"
+  echo ""
+fi
+
