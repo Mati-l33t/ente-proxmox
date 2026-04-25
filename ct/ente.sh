@@ -151,9 +151,15 @@ advanced_settings() {
   while IFS= read -r br; do
     bridge_opts+=("$br" " ")
   done < <(ip link show | grep -oP 'vmbr\d+' | sort -u)
-  [ "${#bridge_opts[@]}" -gt 2 ] && \
+  local bridge_count=$(( ${#bridge_opts[@]} / 2 ))
+  if [ "$bridge_count" -eq 0 ]; then
+    BRG="vmbr0"
+  elif [ "$bridge_count" -eq 1 ]; then
+    BRG="${bridge_opts[0]}"
+  else
     BRG=$(whiptail --backtitle "Ente Installer" --title "NETWORK BRIDGE" \
-      --menu "\nSelect network bridge:" 16 58 6 "${bridge_opts[@]}" 3>&1 1>&2 2>&3) || BRG="vmbr0"
+      --menu "\nSelect network bridge:" 16 58 6 "${bridge_opts[@]}" 3>&1 1>&2 2>&3) || exit
+  fi
 
   local ip_choice
   ip_choice=$(whiptail --backtitle "Ente Installer" --title "IP CONFIGURATION" \
@@ -352,7 +358,7 @@ build_container() {
   msg_ok "LXC container ${CTID} created"
 
   msg_info "Starting container"
-  pct start "$CTID"
+  pct start "$CTID" || msg_error "Failed to start container ${CTID}"
   sleep 8
   msg_ok "Container started"
 
@@ -366,8 +372,17 @@ build_container() {
   msg_ok "Network connected"
 
   IP=$(pct exec "$CTID" -- hostname -I 2>/dev/null | awk '{print $1}')
-  # If no server host was given, use the container's IP
   [ -z "${SERVER_HOST:-}" ] && SERVER_HOST="$IP"
+
+  if [ "${SSH:-no}" = "yes" ]; then
+    msg_info "Enabling SSH access"
+    pct exec "$CTID" -- bash -c "
+      apt-get install -y -qq openssh-server >/dev/null 2>&1
+      sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
+      systemctl enable --now ssh >/dev/null 2>&1
+    " || true
+    msg_ok "SSH access enabled"
+  fi
 }
 
 # ─────────────────────────────────────────────
