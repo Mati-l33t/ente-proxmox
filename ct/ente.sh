@@ -56,7 +56,7 @@ select_storage() {
   local names=()
   while IFS= read -r name; do
     names+=("$name" " ")
-  done < <(pvesm status -content "$content" 2>/dev/null | awk 'NR>1 {print $1}')
+  done < <(pvesm status -content "$content" 2>/dev/null | awk 'NR>1 && $3=="active" {print $1}')
 
   local count=$(( ${#names[@]} / 2 ))
   [ "$count" -eq 0 ] && msg_error "No suitable ${type} storage found"
